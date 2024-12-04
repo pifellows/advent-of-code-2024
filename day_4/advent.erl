@@ -6,7 +6,7 @@
 part_1(Filename) ->
     {ok, Board} = file:read_file(Filename),
     BoardWidth = get_board_width(Board),
-    count_all_xmas(Board).
+    count_all_xmas(Board, BoardWidth).
 
 
 get_board_width(Board) ->
@@ -14,8 +14,8 @@ get_board_width(Board) ->
     size(H).
 
 
-count_all_xmas(Board) ->
-    count_all_xmas(Board, Board, {0, 0}, 0).
+count_all_xmas(Board, BoardWidth) ->
+    count_all_xmas(Board, {Board, BoardWidth}, {0, 0}, 0).
 
 
 count_all_xmas(<<>>, _Board, _ColumnRow, NuFound) ->
@@ -25,13 +25,13 @@ count_all_xmas(<<"\n", Rest/binary>>, Board, {_Column, Row}, NuFound) ->
 count_all_xmas(<<"XMAS", Rest/binary>>, Board, {Column, Row}, NuFound) ->
     count_all_xmas(Rest, Board, {Column + 4, Row}, NuFound + 1);
 count_all_xmas(<<"X", Rest/binary>>, Board, {Column, Row}, NuFound) ->
-    Up = count_up(Board, {Column, Row}, "XMAS"),
+    Up = count_up(Board, {Column, Row}, "SAMX"),
     count_all_xmas(Rest, Board, {Column + 1, Row}, NuFound + Up);
 count_all_xmas(<<"SAMX", Rest/binary>>, Board, {Column, Row}, NuFound) ->
-    Up = count_up(Board, {Column, Row}, "SAMX"),
+    Up = count_up(Board, {Column, Row}, "XMAS"),
     count_all_xmas(Rest, Board, {Column + 4, Row}, NuFound + 1 + Up);
 count_all_xmas(<<"S", Rest/binary>>, Board, {Column, Row}, NuFound) ->
-    Up = count_up(Board, {Column, Row}, "SAMX"),
+    Up = count_up(Board, {Column, Row}, "XMAS"),
     count_all_xmas(Rest, Board, {Column + 1, Row}, NuFound + Up);
 count_all_xmas(<<_C, Rest/binary>>, Board, {Column, Row}, NuFound) ->
     count_all_xmas(Rest, Board, {Column + 1, Row}, NuFound).
@@ -96,8 +96,6 @@ make_word(Board, {[C | Cs], [R | Rs]}, Acc) ->
     Character = find_char(Board, C, R),
     make_word(Board, {Cs, Rs}, binary_to_list(Character) ++ Acc).
 
-find_char(Board, C, 0) ->
-    binary:part(Board, C, 1);
-find_char(Board, C, R) ->
-    Position = ((C * (R + 1))),
+find_char({Board, BoardWidth}, C, R) ->
+    Position = (BoardWidth * R) + R + C,
     binary:part(Board, Position, 1).
