@@ -1,23 +1,17 @@
--module(aoc).
+-module(advent).
 
--export([solve_part_1/1,
-         solve_part_2/1,
-         read_and_pair/1,
-         to_arrays/1,
-         get_diffs/1,
-         get_similarities/1]).
+-compile(export_all).
 
-
-solve_part_1(Filename) ->
+part_1(Filename) ->
     PairedIntegers = read_and_pair(Filename),
-    Arrays = to_arrays(PairedIntegers),
+    Arrays = to_parallel_arrays(PairedIntegers),
     Diffs = get_diffs(Arrays),
     lists:sum(Diffs).
 
 
-solve_part_2(Filename) ->
+part_2(Filename) ->
     PairedIntegers = read_and_pair(Filename),
-    Arrays = to_arrays(PairedIntegers),
+    Arrays = to_parallel_arrays(PairedIntegers),
     Similarities = get_similarities(Arrays),
     lists:sum(Similarities).
 
@@ -32,12 +26,8 @@ read_and_pair(Filename) ->
               binary:split(Lines, <<"\n">>, [global])).
 
 
-to_arrays(Paired) ->
-    {First, Second} = lists:foldl(fun({L, R}, {LAcc, RAcc}) ->
-                                          {[L | LAcc], [R | RAcc]}
-                                  end,
-                                  {[], []},
-                                  Paired),
+to_parallel_arrays(Paired) ->
+    {First, Second} = lists:unzip(Paired),
     {lists:sort(First), lists:sort(Second)}.
 
 
