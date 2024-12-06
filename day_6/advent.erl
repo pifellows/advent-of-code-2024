@@ -29,13 +29,13 @@ parse_info(<<C, Rest/binary>>, {CurrentColumn, Objects, Guards}) ->
             parse_info(Rest, {CurrentColumn+1, Objects, [Info|Guards]})
         end.
 
-guard_info(<<"^">>, Column) ->
+guard_info($^, Column) ->
     {Column, up};
-guard_info(<<">">>, Column) ->
+guard_info($>, Column) ->
     {Column, right};
-guard_info(<<"<">>, Column) ->
+guard_info($<, Column) ->
     {Column, left};
-guard_info(<<"v">>, Column) ->
+guard_info($v, Column) ->
     {Column, down};
 guard_info(_C, _Column) ->
     not_a_guard.
@@ -45,7 +45,7 @@ combine_info(RowInfo) ->
     combine_info(RowInfo, {0, {[], []}}).
 
 combine_info([], {_TotalRows, {Objects, Guards}}) ->
-    {lists:reverse(Objects), lists:reverse(Guards)};
+    {lists:reverse(lists:flatten(Objects)), lists:reverse(lists:flatten(Guards))};
 combine_info([{Objects, Guards}|Rest], {CurrentRow, {AllObjects, AllGuards}}) ->
     ObjectLocations = lists:map(fun(X) -> {X, CurrentRow} end, Objects),
     GuardLocations = lists:map(fun({Column, Direction}) -> {Column, CurrentRow, Direction} end, Guards),
