@@ -24,7 +24,7 @@ part_2(Filename) ->
     length(Loops).
 
 
-part_2_parallel(Filename) ->
+part_2_concurrent(Filename) ->
     {Map, Objects, [Guard]} = parse_file(Filename),
     PathedMap = walk(Guard, Objects, Map),
     PlacementPoints = get_possible_placement_positions(PathedMap, Guard),
@@ -34,7 +34,7 @@ part_2_parallel(Filename) ->
                     NewObjects = [NewPoint | Objects],
                     follow(Guard, NewObjects, MaxX, MaxY)
             end,
-    Results = parallel(Check, PlacementPoints),
+    Results = concurrent(Check, PlacementPoints),
     Loops = lists:filter(fun(Result) -> Result == loop end, Results),
     length(Loops).
 
@@ -253,7 +253,7 @@ update_path_points(object, NextTile, {_X, _Y, Dir} = _Pos, PathPoints) ->
     maps:put({NextTile, Dir}, true, PathPoints).
 
 
-parallel(Fun, Over) when is_function(Fun) ->
+concurrent(Fun, Over) when is_function(Fun) ->
     Self = self(),
     lists:foreach(
       fun(Item) ->
