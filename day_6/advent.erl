@@ -15,12 +15,29 @@ part_2(Filename) ->
     PlacementPoints = get_possible_placement_positions(PathedMap, Guard),
     MaxY = length(PathedMap),
     MaxX = size(hd(PathedMap)),
-    Results = lists:map(fun(NewPoint) -> 
-        NewObjects = [NewPoint | Objects],
-        follow(Guard, NewObjects, MaxX, MaxY)
-    end, PlacementPoints),
+    Results = lists:map(fun(NewPoint) ->
+                                NewObjects = [NewPoint | Objects],
+                                follow(Guard, NewObjects, MaxX, MaxY)
+                        end,
+                        PlacementPoints),
     Loops = lists:filter(fun(Result) -> Result == loop end, Results),
     length(Loops).
+
+
+part_2_parallel(Filename) ->
+    {Map, Objects, [Guard]} = parse_file(Filename),
+    PathedMap = walk(Guard, Objects, Map),
+    PlacementPoints = get_possible_placement_positions(PathedMap, Guard),
+    MaxY = length(PathedMap),
+    MaxX = size(hd(PathedMap)),
+    Check = fun(NewPoint) ->
+                    NewObjects = [NewPoint | Objects],
+                    follow(Guard, NewObjects, MaxX, MaxY)
+            end,
+    Results = parallel(Check, PlacementPoints),
+    Loops = lists:filter(fun(Result) -> Result == loop end, Results),
+    length(Loops).
+
 
 parse_file(Filename) ->
     {ok, Contents} = file:read_file(Filename),
@@ -110,6 +127,7 @@ step(object, Guard, Map) ->
 step(empty, Guard, Map) ->
     {move(Guard), mark(Guard, Map)}.
 
+
 follow_step(object, Guard) ->
     rotate(Guard);
 follow_step(empty, Guard) ->
@@ -177,9 +195,11 @@ count_spaces_line(<<"X", Rest/binary>>, Acc) ->
 count_spaces_line(<<_C, Rest/binary>>, Acc) ->
     count_spaces_line(Rest, Acc).
 
+
 get_possible_placement_positions(PathedMap, {X, Y, _Direction} = _GuardStartPosition) ->
     PlacementPositions = do_get_possible_placement_positions(PathedMap, {0, []}),
-    PlacementPositions -- [{X,Y}]. %% Exclude Start Position
+    PlacementPositions -- [{X, Y}].  %% Exclude Start Position
+
 
 do_get_possible_placement_positions([], {_RowNum, PlacementPositions}) ->
     PlacementPositions;
@@ -187,8 +207,10 @@ do_get_possible_placement_positions([Row | Rest], {RowNum, PlacementPositions}) 
     RowPositions = lists:map(fun(X) -> {X, RowNum} end, get_row_positions(Row)),
     do_get_possible_placement_positions(Rest, {RowNum + 1, PlacementPositions ++ RowPositions}).
 
+
 get_row_positions(Row) ->
     get_row_positions(Row, {0, []}).
+
 
 get_row_positions(<<>>, {_ColumnNum, Acc}) ->
     Acc;
@@ -197,14 +219,16 @@ get_row_positions(<<"X", Rest/binary>>, {ColumnNum, Acc}) ->
 get_row_positions(<<_C, Rest/binary>>, {ColumnNum, Acc}) ->
     get_row_positions(Rest, {ColumnNum + 1, Acc}).
 
+
 follow(Start, Objects, MaxX, MaxY) ->
     follow(Start, Objects, MaxX, MaxY, #{}).
 
-follow({X, Y, _Direction}, _Objects, MaxX, MaxY, _PathPoints) when
-    X < 0 orelse Y < 0 orelse MaxX < X orelse MaxY < Y ->
-        left_board;
+
+follow({X, Y, _Direction}, _Objects, MaxX, MaxY, _PathPoints)
+  when X < 0 orelse Y < 0 orelse MaxX < X orelse MaxY < Y ->
+    left_board;
 follow(Pos, Objects, MaxX, MaxY, PathPoints) ->
-    %% Follow the Path until we leave the board or encounter 
+    %% Follow the Path until we leave the board or encounter
     %% an existing point from the same direction
     {Infront, NextTile} = get_tile_infront(Pos, Objects),
     case have_visited_before(Infront, NextTile, Pos, PathPoints) of
@@ -214,14 +238,39 @@ follow(Pos, Objects, MaxX, MaxY, PathPoints) ->
             NewPathPoints = update_path_points(Infront, NextTile, Pos, PathPoints),
             NewPos = follow_step(Infront, Pos),
             follow(NewPos, Objects, MaxX, MaxY, NewPathPoints)
-        end.
+    end.
+
 
 have_visited_before(empty, _NextTile, _Pos, _PathPoints) ->
     false;
 have_visited_before(object, NextTile, {_X, _Y, Dir} = _Pos, PathPoints) ->
     maps:is_key({NextTile, Dir}, PathPoints).
 
+
 update_path_points(empty, _NextTile, _Pos, PathPoints) ->
     PathPoints;
 update_path_points(object, NextTile, {_X, _Y, Dir} = _Pos, PathPoints) ->
     maps:put({NextTile, Dir}, true, PathPoints).
+
+
+parallel(Fun, Over) when is_function(Fun) ->
+    Self = self(),
+    lists:foreach(
+      fun(Item) ->
+              Call = fun() ->
+                             Result = Fun(Item),
+                             Self ! Result
+                     end,
+              spawn_link(Call)
+      end,
+      Over),
+    await(length(Over), []).
+
+
+await(Total, Acc) when Total == length(Acc) ->
+    Acc;
+await(Total, Acc) ->
+    receive
+        Result ->
+            await(Total, [Result | Acc])
+    end.
