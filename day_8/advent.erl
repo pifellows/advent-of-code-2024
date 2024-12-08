@@ -5,17 +5,16 @@
 
 part_1(Filename) ->
     {PointSets, MaxSize} = parse_file_to_pointsets(Filename),
-    AntinodePositions = maps:map(fun(_Key, Points) ->
-                                         Positions = get_antinode_positions(Points),
-                                         lists:filter(fun(Point) ->
-                                                              is_in_bounds(Point, MaxSize)
-                                                      end,
-                                                      Positions)
-                                 end,
-                                 PointSets),
-    ToAdd = lists:flatten(maps:values(AntinodePositions)),
-    Set = sets:from_list(ToAdd),
+    Set = get_pattern_antinodes(PointSets, MaxSize),
     sets:size(Set).
+
+
+part_2(Filename) ->
+    {PointSets, MaxSize} = parse_file_to_pointsets(Filename),
+    PatternAntinodes = get_pattern_antinodes(PointSets, MaxSize),
+    ProjectedAntinodes = get_projected_antinodes(PointSets, MaxSize),
+    AllAntinodes = sets:union(PatternAntinodes, ProjectedAntinodes),
+    sets:size(AllAntinodes).
 
 
 parse_file_to_pointsets(Filename) ->
@@ -51,6 +50,28 @@ get_points_in_line(<<C, Rest/binary>>, LineNum, PosNum, PointsSet) ->
     NewPoints = sets:add_element({PosNum, LineNum}, CurrentPoints),
     UpdatedPointSets = maps:put(C, NewPoints, PointsSet),
     get_points_in_line(Rest, LineNum, PosNum + 1, UpdatedPointSets).
+
+
+get_pattern_antinodes(PointSets, MaxSize) ->
+    AntinodePositions = maps:map(fun(_Key, Points) ->
+                                         Positions = get_antinode_positions(Points),
+                                         lists:filter(fun(Point) ->
+                                                              is_in_bounds(Point, MaxSize)
+                                                      end,
+                                                      Positions)
+                                 end,
+                                 PointSets),
+    ToAdd = lists:flatten(maps:values(AntinodePositions)),
+    sets:from_list(ToAdd).
+
+
+get_projected_antinodes(PointSets, MaxSize) ->
+    Antinodes = maps:map(fun(_Key, Points) ->
+                                get_projected_positions(Points, MaxSize)
+                        end,
+                        PointSets),
+    ToAdd = lists:flatten(maps:values(Antinodes)),
+    sets:from_list(ToAdd).
 
 
 get_antinode_positions(Points) when not is_list(Points) ->
@@ -92,3 +113,32 @@ get_antinode({X1, Y1}, {X2, Y2}) ->
 is_in_bounds({X, Y}, {MaxX, MaxY}) ->
     -1 < X andalso X < MaxX andalso
     -1 < Y andalso Y < MaxY.
+
+
+get_projected_positions(Points, MaxSize) when not is_list(Points) ->
+    get_projected_positions(sets:to_list(Points), MaxSize);
+get_projected_positions(Points, MaxSize) ->
+    PointPairs = get_point_combinations(Points),
+    lists:foldl(fun(PointPair, Acc) ->
+                        ProjectedPoints = project_points(PointPair, MaxSize),
+                        ProjectedPoints ++ Acc
+                end,
+                [],
+                PointPairs).
+
+
+project_points({{X1, Y1} = Point1, {X2, Y2} = Point2}, MaxSize) ->
+    Step1 = {X2 - X1, Y2 - Y1},
+    Step2 = {X1 - X2, Y1 - Y2},
+    Points = project_points(Point1, Step1, MaxSize, []),
+    project_points(Point2, Step2, MaxSize, Points).
+
+
+project_points({X, Y} = _Start, {Dx, Dy} = Step, MaxSize, Acc) ->
+    NewPos = {X + Dx, Y + Dy},
+    case is_in_bounds(NewPos, MaxSize) of
+        true ->
+            project_points(NewPos, Step, MaxSize, [NewPos | Acc]);
+        false ->
+            Acc
+    end.
