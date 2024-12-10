@@ -16,6 +16,18 @@ part_1(Filename) ->
     {UniquePeaksByTrailhead, lists:sum(UniquePeaksByTrailhead)}.
 
 
+part_2(Filename) ->
+    {ok, Content} = file:read_file(Filename),
+    {Map, Trailheads, _MaxSize} = parse_map(Content),
+    PeaksFromTrailheads = find_unique_trail_paths(Map, Trailheads),
+    Ratings = lists:map(
+                               fun(PeakEnds) ->
+                                 length(PeakEnds)      
+                               end,
+                               PeaksFromTrailheads),
+    {Ratings, lists:sum(Ratings)}.
+
+
 parse_map(Content) ->
     {Lines, MaxSize} = get_lines(Content),
     {Map, Trailheads} = generate_map(Lines),
@@ -68,6 +80,20 @@ find_trail_peak_paths(Map, TrailheadSet) ->
       Trailheads).
 
 
+find_unique_trail_paths(Map, TrailheadSet) ->
+    Trailheads = sets:to_list(TrailheadSet),
+    lists:map(
+        fun(Trailhead) ->
+            find_peak_paths(Trailhead, Map)
+        end,
+        Trailheads
+    ).
+
+find_peak_paths(Trailhead, Map) ->
+    Peaks = do_find_peaks(Trailhead, Map),
+    lists:flatten(Peaks).
+
+
 find_peaks(Trailhead, Map) ->
     Peaks = do_find_peaks(Trailhead, Map),
     sets:to_list(sets:from_list(lists:flatten(Peaks))).
@@ -75,6 +101,7 @@ find_peaks(Trailhead, Map) ->
 
 do_find_peaks(Point, Map) ->
     do_find_peaks(Point, 0, Map, []).
+
 
 do_find_peaks(Point, Step, Map, Acc) ->
     case find_next_steps(Point, Step, Map) of
