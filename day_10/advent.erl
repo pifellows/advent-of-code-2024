@@ -29,21 +29,22 @@ get_lines(Content) ->
 
 
 generate_map(Lines) ->
-    generate_map(Lines, #{}, sets:new()).
+    generate_map(Lines, 0, #{}, sets:new()).
 
 
-generate_map([], Map, Trailheads) ->
+generate_map([],_LineNumber, Map, Trailheads) ->
     {Map, Trailheads};
-generate_map([CurrentLine | Lines], Map, AllTrailheads) ->
+generate_map([CurrentLine | Lines], LineNumber, Map, AllTrailheads) ->
     {LineList, Trailheads} = parse_line(CurrentLine),
-    NewTrailheads = sets:union(AllTrailheads, Trailheads),
+    TrailheadsSet = sets:from_list(lists:map(fun(Y) -> {LineNumber, Y} end, Trailheads)),
+    NewTrailheads = sets:union(AllTrailheads, TrailheadsSet),
     NewMap = lists:foldl(
                fun({Y, V}, Acc) ->
-                       maps:put({CurrentLine, Y}, V, Acc)
+                       maps:put({LineNumber, Y}, V, Acc)
                end,
                Map,
                LineList),
-    generate_map(Lines, NewMap, NewTrailheads).
+    generate_map(Lines, LineNumber + 1, NewMap, NewTrailheads).
 
 
 parse_line(CurrentLine) ->
