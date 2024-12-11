@@ -5,6 +5,45 @@
 part_1(Filename) ->
     calculate_length_new_line(Filename, 25).
 
+part_2(Filename) ->
+    Numbers = parse_file(Filename),
+    NumbersCounter = to_counters(Numbers),
+    Results = step_counters(NumbersCounter, 75),
+    collect_results(Results).
+
+collect_results(Results) ->
+    maps:fold(fun(_, Count, Acc) -> Acc + Count end, 0, Results).
+
+
+to_counters(Numbers) ->
+    to_counters(Numbers, #{}).
+
+
+to_counters([], Counters) ->
+    Counters;
+to_counters([Number | Rest], Counters) ->
+    Count = maps:get(Number, Counters, 0),
+    NewCounters = maps:put(Number, Count + 1, Counters),
+    to_counters(Rest, NewCounters).
+
+
+step_counters(Stones, 0) ->
+    Stones;
+step_counters(Stones, Steps) ->
+    NewStones = maps:fold(
+        fun(Value, Count, Acc) -> 
+            NewValues = step(Value),
+            add_to_counter(NewValues, Count, Acc)
+        end, #{}, Stones),
+    step_counters(NewStones, Steps - 1).
+
+
+add_to_counter(Values, Count, Acc) when is_list(Values) ->
+    lists:foldl(fun(Value, Acc1) -> add_to_counter(Value, Count, Acc1) end, Acc, Values);
+add_to_counter(Value, Count, Acc) ->
+    CurrentCount = maps:get(Value, Acc, 0),
+    maps:put(Value, CurrentCount + Count, Acc).
+
 %% Part 1 is 25 Steps, Part 2 is 75
 %% 75 Steps is _really_ slow, so there must be some sort of trick
 calculate_length_new_line(Filename, Steps) ->
@@ -31,7 +70,7 @@ steps(Numbers, Steps) when Steps > 0 ->
 
 
 step(Numbers) when is_list(Numbers) ->
-    pmap(fun(Number) -> step(Number) end, Numbers);
+    lists:map(fun(Number) -> step(Number) end, Numbers);
 step(Number) when is_binary(Number) ->
     apply_rules(Number).
 
