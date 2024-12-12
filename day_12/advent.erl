@@ -225,7 +225,10 @@ count_sides(Graph) ->
 get_first_perimeter_node(Graph) ->
     Sorted = sort_graph_by_edges(Graph),
     Start = hd(Sorted),
-    walk_perimeter(Start, Graph).
+    {Sides, Path} = walk_perimeter(Start, Graph),
+    Removed = lists:foldl(fun(Point, Acc) -> maps:remove(Point, Acc) end, Graph, Path),
+    io:format("Remains=~p~n", [Removed]),
+    Sides.
 
 
 sort_graph_by_edges(Graph) ->
@@ -238,7 +241,7 @@ walk_perimeter({Point, [Edge]}, Graph) ->
     {Ex, Ey} = Edge,
 
     Direction = {Ex - Px, Ey - Py},
-    walk(Point, Edge, Direction, Graph, 2);
+    walk(Point, Edge, Direction, Graph, 2, [Point]);
 walk_perimeter({Point, [Edge | _]}, Graph) ->
     {Px, Py} = Point,
     {Ex, Ey} = Edge,
@@ -252,19 +255,19 @@ walk_perimeter({Point, [Edge | _]}, Graph) ->
                 end,
     {Dx, Dy} = Direction,
     Next = {Px + Dx, Py + Dy},
-    walk(Point, Next, {Dx, Dy}, Graph, 1).
+    walk(Point, Next, {Dx, Dy}, Graph, 1, [Point]).
 
 
-walk(StartPoint, StartPoint, _Direction, _Graph, Sides) ->
-    Sides;
-walk(StartPoint, CurrentPoint, Direction, Graph, Sides) ->
+walk(StartPoint, StartPoint, _Direction, _Graph, Sides, Path) ->
+    {Sides, Path};
+walk(StartPoint, CurrentPoint, Direction, Graph, Sides, Path) ->
     case must_turn(CurrentPoint, Direction, Graph) of
         {true, NewDirection, NumberOfTurns} ->
             NextPoint = get_next_point(CurrentPoint, NewDirection),
-            walk(StartPoint, NextPoint, NewDirection, Graph, Sides + NumberOfTurns);
+            walk(StartPoint, NextPoint, NewDirection, Graph, Sides + NumberOfTurns, [CurrentPoint | Path]);
         false ->
             NextPoint = get_next_point(CurrentPoint, Direction),
-            walk(StartPoint, NextPoint, Direction, Graph, Sides)
+            walk(StartPoint, NextPoint, Direction, Graph, Sides, [CurrentPoint | Path])
     end.
 
 
