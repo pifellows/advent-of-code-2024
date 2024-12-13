@@ -16,11 +16,12 @@ data(Filename) ->
     Nodes = create_edges(Points, MaxSize),
     partition_graphs(Nodes).
 
+
 part_2(Filename) ->
     {MaxSize, Points} = from_file(Filename),
     Nodes = create_edges(Points, MaxSize),
     Graphs = partition_graphs(Nodes),
-    Results = lists:map(fun({Tag, Graph}) -> {Tag, calcualte_discount_print(Graph)} end, Graphs),
+    Results = lists:map(fun({Tag, Graph}) -> {Tag, calcualte_discount_print(Graph, MaxSize)} end, Graphs),
     Sum = lists:sum(lists:map(fun({_, Price}) -> Price end, Results)),
     {Results, Sum}.
 
@@ -41,6 +42,20 @@ print_graph(Key, Graphs, Size) ->
     {Key, Graph} = lists:keyfind(Key, 1, Graphs),
     Points = maps:map(fun(_K, _V) -> Key end, Graph),
     print_map(Points, Size).
+
+
+graph_to_points(Graph) ->
+    graph_to_points(Graph, <<"X">>).
+
+
+graph_to_points(Graph, Marker) when is_list(Marker) ->
+    graph_to_points(Graph, list_to_binary(Marker));
+graph_to_points(Graph, Marker) ->
+    maps:map(fun(_Point, _Edges) -> Marker end, Graph).
+
+
+points_to_binary(Points, MaxSize) ->
+    compile_map(Points, MaxSize).
 
 
 print_map(Points, Size) ->
@@ -203,142 +218,65 @@ calculate_fence_price(Graph) ->
     Area * Perimeter.
 
 
-calcualte_discount_print(Graph) ->
+calcualte_discount_print(Graph, MaxSize) ->
     Area = maps:size(Graph),
-    Sides = count_sides(Graph),
+    Sides = count_sides(Graph, MaxSize),
     Area * Sides.
 
 
-count_sides(Graph) ->
-    case maps:size(Graph) of
-        0 ->
-            0;
-        1 ->
-            4;
-        2 ->
-            4;
-        _Otherwise ->
-            get_first_perimeter_node(Graph)
-    end.
+count_sides(Graph, {H, W} = _MaxSize) ->
+    %% Convert Graph into a list of binary lines.
+    %% For each line, check the line below it
+    %% if values are different, we are at an edge
+    %% if value changes on next position, we complete an edge
+    Points = graph_to_points(Graph),
+    VerticalEdges = find_edges(Points, {H, W}),
+    TransposedPoints = transpose(Points),
+    HorizontalEdges = find_edges(TransposedPoints, {W, H}),
+    HorizontalEdges + VerticalEdges.
 
 
-get_first_perimeter_node(Graph) ->
-    Sorted = sort_graph_by_edges(Graph),
-    Start = hd(Sorted),
-    {Sides, Path} = walk_perimeter(Start, Graph),
-    Removed = lists:foldl(fun(Point, Acc) -> maps:remove(Point, Acc) end, Graph, Path),
-    io:format("Remains=~p~n", [Removed]),
-    Sides.
+transpose(Points) ->
+    L = maps:to_list(Points),
+    T = lists:map(fun({{X, Y}, V}) -> {{Y, X}, V} end, L),
+    maps:from_list(T).
 
 
-sort_graph_by_edges(Graph) ->
-    lists:sort(fun({_, A}, {_, B}) -> length(A) < length(B) end, maps:to_list(Graph)).
+find_edges(Points, Size) ->
+    find_edges(Points, Size, 0).
 
 
-walk_perimeter({Point, [Edge]}, Graph) ->
-    %% we have 1 edge. That means we are in a "spur" - therefore there are at least 2 edges we can account for
-    {Px, Py} = Point,
-    {Ex, Ey} = Edge,
-
-    Direction = {Ex - Px, Ey - Py},
-    walk(Point, Edge, Direction, Graph, 2, [Point]);
-walk_perimeter({Point, [Edge | _]}, Graph) ->
-    {Px, Py} = Point,
-    {Ex, Ey} = Edge,
-
-    InitalDirection = {Ex - Px, Ey - Py},
-    Direction = case can_turn_left(Point, InitalDirection, Graph) of
-                    {true, D} ->
-                        D;
-                    false ->
-                        InitalDirection
-                end,
-    {Dx, Dy} = Direction,
-    Next = {Px + Dx, Py + Dy},
-    walk(Point, Next, {Dx, Dy}, Graph, 1, [Point]).
+find_edges(_Points, {X, _Y} = _Size, Count) when X < -1 ->
+    Count;
+find_edges(Points, {X, Y} = _Size, Count) ->
+    NewEdges = trace_line(Points, X, Y),
+    find_edges(Points, {X - 1, Y}, Count + NewEdges).
 
 
-walk(StartPoint, StartPoint, _Direction, _Graph, Sides, Path) ->
-    {Sides, Path};
-walk(StartPoint, CurrentPoint, Direction, Graph, Sides, Path) ->
-    case must_turn(CurrentPoint, Direction, Graph) of
-        {true, NewDirection, NumberOfTurns} ->
-            NextPoint = get_next_point(CurrentPoint, NewDirection),
-            walk(StartPoint, NextPoint, NewDirection, Graph, Sides + NumberOfTurns, [CurrentPoint | Path]);
-        false ->
-            NextPoint = get_next_point(CurrentPoint, Direction),
-            walk(StartPoint, NextPoint, Direction, Graph, Sides, [CurrentPoint | Path])
-    end.
+trace_line(Points, LineNum, Width) ->
+    trace_line(Points, LineNum, Width - 1, 0).
 
 
-must_turn(Point, Direction, Graph) ->
-    case can_turn_left(Point, Direction, Graph) of
-        {true, NewDirection} ->
-            {true, NewDirection, 1};
-        false ->
-            case can_go_forward(Point, Direction, Graph) of
+trace_line(_Points, _X, Y, Count) when Y < -1 ->
+    Count;
+trace_line(Points, X, Y, Count) ->
+    CurrentPointInGraph = maps:is_key({X, Y}, Points),
+    PairedPointInGraph = maps:is_key({X - 1, Y}, Points),
+    PreviousPointInGraph = maps:is_key({X, Y + 1}, Points),
+    PreviousPairedPointInGraph = maps:is_key({X - 1, Y + 1}, Points),
+    case (CurrentPointInGraph /= PairedPointInGraph) of
+        true ->
+            case (PreviousPairedPointInGraph == PairedPointInGraph andalso CurrentPointInGraph == PreviousPointInGraph) of
                 true ->
-                    false;
+                    %% Paired Points are different, but Current and last Are the same
+                    %% So this is an edge we have seen before
+                    trace_line(Points, X, Y - 1, Count);
                 false ->
-                    case can_turn_right(Point, Direction, Graph) of
-                        {true, NewDirection} ->
-                            {true, NewDirection, 1};
-                        false ->
-                            {true, reverse(Direction), 2}
-                    end
-            end
-    end.
-
-
-can_turn_left({Px, Py} = _Point, Direction, Graph) ->
-    LeftDirection = turn_left(Direction),
-    {Lx, Ly} = LeftDirection,
-    case maps:is_key({Px + Lx, Py + Ly}, Graph) of
-        true ->
-            {true, LeftDirection};
+                    %% Paired are different and the Current and last are different
+                    %% So this is a new edge
+                    trace_line(Points, X, Y - 1, Count + 1)
+            end;
         false ->
-            false
+            %% Paired points are the same, no edge
+            trace_line(Points, X, Y - 1, Count)
     end.
-
-
-turn_left({1, 0}) ->
-    {0, 1};
-turn_left({0, 1}) ->
-    {-1, 0};
-turn_left({-1, 0}) ->
-    {0, -1};
-turn_left({0, -1}) ->
-    {1, 0}.
-
-
-can_turn_right({Px, Py} = _Point, Direction, Graph) ->
-    RightDirection = turn_right(Direction),
-    {Rx, Ry} = RightDirection,
-    case maps:is_key({Px + Rx, Py + Ry}, Graph) of
-        true ->
-            {true, RightDirection};
-        false ->
-            false
-    end.
-
-
-turn_right({1, 0}) ->
-    {0, -1};
-turn_right({0, 1}) ->
-    {1, 0};
-turn_right({-1, 0}) ->
-    {0, 1};
-turn_right({0, -1}) ->
-    {-1, 0}.
-
-
-can_go_forward({Px, Py}, {Dx, Dy}, Graph) ->
-    maps:is_key({Px + Dx, Py + Dy}, Graph).
-
-
-reverse({X, Y}) ->
-    {-X, -Y}.
-
-
-get_next_point({Px, Py} = _Point, {X, Y} = _Direction) ->
-    {Px + X, Py + Y}.
