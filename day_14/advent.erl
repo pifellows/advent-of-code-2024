@@ -14,8 +14,9 @@ part_1(Type) ->
 
 part_2() ->
     {Agents, Size} = parse_file(input),
-    BatchPoints = lists:map(fun(N) -> {N, simulate(Agents, N, Size)} end, lists:seq(1, 10000)),
-    lists:filter(fun({_Batch, Points}) -> all_unique_positions(Points) end, BatchPoints).
+    AgentCount = length(Agents),
+    Until = fun(Points) -> all_unique_positions(Points, AgentCount) end,
+    step(Agents, Size, Until).
 
 
 parse_file(Type) ->
@@ -104,13 +105,13 @@ place_point({X, Y} = P, MidX, MidY, {A, B, C, D}) ->
     end.
 
 
-all_unique_positions(Batch) ->
-    Set = sets:from_list(Batch),
-    sets:size(Set) == length(Batch).
+all_unique_positions(Batch, AgentCount) ->
+    Set = sets:from_list(proplists:get_keys(Batch), [{version, 2}]),
+    sets:size(Set) == AgentCount.
 
 
-draw({_N, Points}, {MaxX, MaxY}) ->
-    Set = sets:from_list(Points),
+draw({Points, _N}, {MaxX, MaxY}) ->
+    Set = sets:from_list(Points, [{version, 2}]),
     Lines = lists:map(fun(L) -> draw_line(MaxX, L, Set) end, lists:seq(0, MaxY - 1)),
     Picture = lists:join("\n", Lines),
     io:format("~s~n", [Picture]).
@@ -127,3 +128,18 @@ draw_line(MaxX, Y, Set) ->
                            end,
                            lists:seq(0, MaxX - 1)),
     lists:join("", Characters).
+
+step(Agents, Size, Until) ->
+    step(Agents, Size, Until, 0).
+
+step(Agents, {Mx, My} = Size, Until, Steps) ->
+    NewAgents = lists:map(
+        fun({{X0, Y0}, {Dx, Dy} = Direction}) -> 
+            {{normalize(X0 + Dx, Mx), normalize(Y0 + Dy, My)}, Direction}
+        end, Agents),
+    case Until(NewAgents) of
+        true ->
+            {proplists:get_keys(NewAgents), Steps + 1};
+        false ->
+            step(NewAgents, Size, Until, Steps + 1)
+        end.
