@@ -2,6 +2,7 @@
 
 -compile(export_all).
 
+
 part_1(Filename) ->
     {{Robot, Tiles, _Size}, Movements} = parse_file(Filename),
     {_RobotFinished, FinalTiles} = apply_all_movement(Robot, Movements, Tiles),
@@ -24,13 +25,14 @@ parse_file(Filename) ->
     WarehouseData = parse_warehouse(WarehouseBlock),
     {WarehouseData, Movements}.
 
-    parse_file_wide(Filename) ->
-        {ok, Content} = file:read_file(Filename),
-        [WarehouseBlock, MovementBlock] = binary:split(Content, <<"\n\n">>),
-        ScaledWarehouseBlock = scale_map(WarehouseBlock),
-        Movements = parse_movements(MovementBlock),
-        WarehouseData = parse_warehouse_wide(ScaledWarehouseBlock),
-        {WarehouseData, Movements}.
+
+parse_file_wide(Filename) ->
+    {ok, Content} = file:read_file(Filename),
+    [WarehouseBlock, MovementBlock] = binary:split(Content, <<"\n\n">>),
+    ScaledWarehouseBlock = scale_map(WarehouseBlock),
+    Movements = parse_movements(MovementBlock),
+    WarehouseData = parse_warehouse_wide(ScaledWarehouseBlock),
+    {WarehouseData, Movements}.
 
 
 parse_movements(MovementBlock) ->
@@ -78,37 +80,37 @@ parse_warehouse_line(<<_C:1/binary, Rest/binary>>, Y, Acc) ->
     parse_warehouse_line(Rest, Y + 1, Acc).
 
 
-    parse_warehouse_wide(WarehouseBlock) ->
-        Rows = binary:split(WarehouseBlock, <<"\n">>, [global]),
-        Size = {length(Rows), size(hd(Rows))},
-        WarehouseTiles = lists:foldl(
-                           fun({X, L}, W) ->
-                                   Ys = parse_warehouse_line_wide(L),
-                                   lists:foldl(fun({Y, V}, W1) -> maps:put({X, Y}, V, W1) end, W, Ys)
-                           end,
-                           #{},
-                           lists:enumerate(0, Rows)),
-        [{RK, _}] = maps:to_list(maps:filter(fun(_K, V) -> V == robot end, WarehouseTiles)),
-        WarehouseTilesNoRobot = maps:remove(RK, WarehouseTiles),
-        {RK, WarehouseTilesNoRobot, Size}.
-    
-    
-        parse_warehouse_line_wide(L) ->
-            parse_warehouse_line_wide(L, 0, []).
-    
-    
-            parse_warehouse_line_wide(<<>>, _Y, Acc) ->
-        Acc;
-    parse_warehouse_line_wide(<<"#", Rest/binary>>, Y, Acc) ->
-        parse_warehouse_line_wide(Rest, Y + 1, [{Y, wall} | Acc]);
-    parse_warehouse_line_wide(<<"[", Rest/binary>>, Y, Acc) ->
-        parse_warehouse_line_wide(Rest, Y + 1, [{Y, box_left} | Acc]);
-    parse_warehouse_line_wide(<<"]", Rest/binary>>, Y, Acc) ->
-        parse_warehouse_line_wide(Rest, Y + 1, [{Y, box_right} | Acc]);
-    parse_warehouse_line_wide(<<"@", Rest/binary>>, Y, Acc) ->
-        parse_warehouse_line_wide(Rest, Y + 1, [{Y, robot} | Acc]);
-    parse_warehouse_line_wide(<<_C:1/binary, Rest/binary>>, Y, Acc) ->
-        parse_warehouse_line_wide(Rest, Y + 1, Acc).
+parse_warehouse_wide(WarehouseBlock) ->
+    Rows = binary:split(WarehouseBlock, <<"\n">>, [global]),
+    Size = {length(Rows), size(hd(Rows))},
+    WarehouseTiles = lists:foldl(
+                       fun({X, L}, W) ->
+                               Ys = parse_warehouse_line_wide(L),
+                               lists:foldl(fun({Y, V}, W1) -> maps:put({X, Y}, V, W1) end, W, Ys)
+                       end,
+                       #{},
+                       lists:enumerate(0, Rows)),
+    [{RK, _}] = maps:to_list(maps:filter(fun(_K, V) -> V == robot end, WarehouseTiles)),
+    WarehouseTilesNoRobot = maps:remove(RK, WarehouseTiles),
+    {RK, WarehouseTilesNoRobot, Size}.
+
+
+parse_warehouse_line_wide(L) ->
+    parse_warehouse_line_wide(L, 0, []).
+
+
+parse_warehouse_line_wide(<<>>, _Y, Acc) ->
+    Acc;
+parse_warehouse_line_wide(<<"#", Rest/binary>>, Y, Acc) ->
+    parse_warehouse_line_wide(Rest, Y + 1, [{Y, wall} | Acc]);
+parse_warehouse_line_wide(<<"[", Rest/binary>>, Y, Acc) ->
+    parse_warehouse_line_wide(Rest, Y + 1, [{Y, box_left} | Acc]);
+parse_warehouse_line_wide(<<"]", Rest/binary>>, Y, Acc) ->
+    parse_warehouse_line_wide(Rest, Y + 1, [{Y, box_right} | Acc]);
+parse_warehouse_line_wide(<<"@", Rest/binary>>, Y, Acc) ->
+    parse_warehouse_line_wide(Rest, Y + 1, [{Y, robot} | Acc]);
+parse_warehouse_line_wide(<<_C:1/binary, Rest/binary>>, Y, Acc) ->
+    parse_warehouse_line_wide(Rest, Y + 1, Acc).
 
 
 expand_movements(Movements) ->
@@ -233,7 +235,7 @@ get_robot_movement_data(Robot, MovementDirection, MovementAmount, Tiles, {Curren
                                     Tiles,
                                     {CurrentFinalPosition, [NextRobot | Boxes]});
         undefined ->
-            get_robot_movement_data(NextRobot, MovementDirection, MovementAmount -1, Tiles, Acc)
+            get_robot_movement_data(NextRobot, MovementDirection, MovementAmount - 1, Tiles, Acc)
     end.
 
 
@@ -246,9 +248,9 @@ move_boxes(Pos, [Box | Boxes], MovementDirection, Tiles) ->
             Tiles1 = maps:remove(Box, Tiles),
             Tiles2 = maps:put(NewPos, box, Tiles1),
             move_boxes(NewPos, Boxes, MovementDirection, Tiles2);
-    undefined ->
-        {[Box | Boxes], Tiles}
-end.
+        undefined ->
+            {[Box | Boxes], Tiles}
+    end.
 
 
 find_space_before_wall(Pos, MovementDirection, Tiles) ->
@@ -264,15 +266,17 @@ find_space_before_wall(Pos, MovementDirection, Tiles) ->
             find_space_before_wall(NextPos, MovementDirection, Tiles);
         wall ->
             undefined
-        end.
+    end.
 
-        backfill_boxes(Pos, [], _MovementDirection, Tiles) ->
-            {Pos, Tiles};
-        backfill_boxes(Pos, [Box | Boxes], MovementDirection, Tiles) ->
-            Tiles1 = maps:remove(Box, Tiles),
-            Tiles2 = maps:put(Pos, box, Tiles1),
-            NextPos = add(Pos, MovementDirection),
-            backfill_boxes(NextPos, Boxes, MovementDirection, Tiles2).
+
+backfill_boxes(Pos, [], _MovementDirection, Tiles) ->
+    {Pos, Tiles};
+backfill_boxes(Pos, [Box | Boxes], MovementDirection, Tiles) ->
+    Tiles1 = maps:remove(Box, Tiles),
+    Tiles2 = maps:put(Pos, box, Tiles1),
+    NextPos = add(Pos, MovementDirection),
+    backfill_boxes(NextPos, Boxes, MovementDirection, Tiles2).
+
 
 gps_score({X, Y}) ->
     (100 * X) + Y.
@@ -285,78 +289,83 @@ scale_map(WarehouseBlock) ->
 scale_map(<<>>, Acc) ->
     Acc;
 scale_map(<<".", Rest/binary>>, Acc) ->
-    scale_map(Rest, << Acc/binary, "..">>);
+    scale_map(Rest, <<Acc/binary, "..">>);
 scale_map(<<"#", Rest/binary>>, Acc) ->
-    scale_map(Rest, << Acc/binary, "##">>);
+    scale_map(Rest, <<Acc/binary, "##">>);
 scale_map(<<"O", Rest/binary>>, Acc) ->
-    scale_map(Rest, << Acc/binary, "[]">>);
+    scale_map(Rest, <<Acc/binary, "[]">>);
 scale_map(<<"@", Rest/binary>>, Acc) ->
-    scale_map(Rest, << Acc/binary, "@.">>);
+    scale_map(Rest, <<Acc/binary, "@.">>);
 scale_map(<<"\n", Rest/binary>>, Acc) ->
-    scale_map(Rest, << Acc/binary, "\n">>).
+    scale_map(Rest, <<Acc/binary, "\n">>).
 
 
-    apply_all_movement_wide(Robot, [] = _Movements, Tiles) ->
-        {Robot, Tiles};
-    apply_all_movement_wide(Robot, [Movement | Movements], Tiles) ->
-        {NewRobot, NewTiles} = apply_movement_wide(Robot, Movement, Tiles),
-        apply_all_movement_wide(NewRobot, Movements, NewTiles).
-
-    apply_movement_wide(Robot, Movement, Tiles) ->
-        {Direction, 1  = _Amount} = get_movement_data(Movement),
-        {NewRobot, NewTiles} = apply_m(Robot, Direction, Tiles),
-        {NewRobot, NewTiles}.
-
-    apply_m(Robot, {0, _N} = Direction, Tiles) -> 
-        %% Left and Right Movement
-        move_leftright(Robot, Direction, Tiles);
-    apply_m(Robot, Direction, Tiles) ->
-        move_updown(Robot, Direction, Tiles).
-
-    move_leftright(Robot, Direction, Tiles) ->
-        NextPos = add(Robot, Direction),
-        case maps:get(NextPos, Tiles, undefined) of
-            undefined ->
-                {NextPos, Tiles};
-            wall ->
-                {Robot, Tiles};
-            _Box ->
-                NextSpace = find_space_before_wall(NextPos, Direction, Tiles),
-                case NextSpace of
-                    undefined ->
-                        % cannot move, so return as before
-                        {Robot, Tiles};
-                    NextSpace ->
-                        NewTiles = shuffle(NextSpace, NextPos, inverse(Direction), Tiles),
-                        {NextPos, NewTiles}
-                    end
-                end.
-
-    shuffle(Finished, Finished, _Direction, Tiles) ->
-        maps:remove(Finished, Tiles);
-    shuffle(Space, End, Direction, Tiles) ->
-        NextPos = add(Space, Direction),
-        V = maps:get(NextPos, Tiles),
-        Tiles1 = maps:put(Space, V, Tiles),
-        shuffle(NextPos, End, Direction, Tiles1).
+apply_all_movement_wide(Robot, [] = _Movements, Tiles) ->
+    {Robot, Tiles};
+apply_all_movement_wide(Robot, [Movement | Movements], Tiles) ->
+    {NewRobot, NewTiles} = apply_movement_wide(Robot, Movement, Tiles),
+    apply_all_movement_wide(NewRobot, Movements, NewTiles).
 
 
-        move_updown(Robot, Direction, Tiles) ->
-            NextPos = add(Robot, Direction),
-            case maps:get(NextPos, Tiles, undefined) of
+apply_movement_wide(Robot, Movement, Tiles) ->
+    {Direction, 1 = _Amount} = get_movement_data(Movement),
+    {NewRobot, NewTiles} = apply_m(Robot, Direction, Tiles),
+    {NewRobot, NewTiles}.
+
+
+apply_m(Robot, {0, _N} = Direction, Tiles) ->
+    %% Left and Right Movement
+    move_leftright(Robot, Direction, Tiles);
+apply_m(Robot, Direction, Tiles) ->
+    move_updown(Robot, Direction, Tiles).
+
+
+move_leftright(Robot, Direction, Tiles) ->
+    NextPos = add(Robot, Direction),
+    case maps:get(NextPos, Tiles, undefined) of
+        undefined ->
+            {NextPos, Tiles};
+        wall ->
+            {Robot, Tiles};
+        _Box ->
+            NextSpace = find_space_before_wall(NextPos, Direction, Tiles),
+            case NextSpace of
                 undefined ->
-                    {NextPos, Tiles};
-                wall ->
+                    % cannot move, so return as before
                     {Robot, Tiles};
-                box_left ->
-                    BoxTiles = [NextPos, add(NextPos, {0, 1})],
-                    {NewRobot, NewTiles} = move_all_wide_boxes(Robot, BoxTiles, Direction, Tiles),
-                    {NewRobot, NewTiles};
-                box_right ->
-                    BoxTiles = [NextPos, add(NextPos, {0, -1})],
-                    {NewRobot, NewTiles} = move_all_wide_boxes(Robot, BoxTiles, Direction, Tiles),
-                    {NewRobot, NewTiles}
-                end.
+                NextSpace ->
+                    NewTiles = shuffle(NextSpace, NextPos, inverse(Direction), Tiles),
+                    {NextPos, NewTiles}
+            end
+    end.
+
+
+shuffle(Finished, Finished, _Direction, Tiles) ->
+    maps:remove(Finished, Tiles);
+shuffle(Space, End, Direction, Tiles) ->
+    NextPos = add(Space, Direction),
+    V = maps:get(NextPos, Tiles),
+    Tiles1 = maps:put(Space, V, Tiles),
+    shuffle(NextPos, End, Direction, Tiles1).
+
+
+move_updown(Robot, Direction, Tiles) ->
+    NextPos = add(Robot, Direction),
+    case maps:get(NextPos, Tiles, undefined) of
+        undefined ->
+            {NextPos, Tiles};
+        wall ->
+            {Robot, Tiles};
+        box_left ->
+            BoxTiles = [NextPos, add(NextPos, {0, 1})],
+            {NewRobot, NewTiles} = move_all_wide_boxes(Robot, BoxTiles, Direction, Tiles),
+            {NewRobot, NewTiles};
+        box_right ->
+            BoxTiles = [NextPos, add(NextPos, {0, -1})],
+            {NewRobot, NewTiles} = move_all_wide_boxes(Robot, BoxTiles, Direction, Tiles),
+            {NewRobot, NewTiles}
+    end.
+
 
 move_all_wide_boxes(Robot, BoxTiles, Direction, Tiles) ->
     case lists:all(fun(P) -> can_move_in_direction(P, Direction, Tiles) end, BoxTiles) of
@@ -366,13 +375,13 @@ move_all_wide_boxes(Robot, BoxTiles, Direction, Tiles) ->
         true ->
             NewTiles = lists:foldl(fun(P, Acc) -> do_move_in_direction(P, Direction, Acc) end, Tiles, BoxTiles),
             {add(Robot, Direction), NewTiles}
-        end.
-            
+    end.
+
 
 can_move_in_direction(P, Direction, Tiles) ->
     NewPos = add(P, Direction),
     V = maps:get(NewPos, Tiles, undefined),
-    case V of 
+    case V of
         undefined ->
             true;
         wall ->
@@ -381,7 +390,8 @@ can_move_in_direction(P, Direction, Tiles) ->
             can_move_in_direction(NewPos, Direction, Tiles) andalso can_move_in_direction(add(NewPos, {0, 1}), Direction, Tiles);
         box_right ->
             can_move_in_direction(NewPos, Direction, Tiles) andalso can_move_in_direction(add(NewPos, {0, -1}), Direction, Tiles)
-        end.
+    end.
+
 
 do_move_in_direction(P, Direction, Tiles) ->
     NewPos = add(P, Direction),
@@ -397,24 +407,24 @@ do_move_in_direction(P, Direction, Tiles) ->
                     %already Moved
                     Tiles;
                 ValueToMove ->
-                    
-            Tiles1 = do_move_in_direction(NewPos, Direction, Tiles),
-            Tiles2 = do_move_in_direction(add(NewPos, {0, 1}), Direction, Tiles1),
-            
-            Tiles3 = maps:remove(P, Tiles2),
-            maps:put(NewPos, ValueToMove, Tiles3)
-                end;
+
+                    Tiles1 = do_move_in_direction(NewPos, Direction, Tiles),
+                    Tiles2 = do_move_in_direction(add(NewPos, {0, 1}), Direction, Tiles1),
+
+                    Tiles3 = maps:remove(P, Tiles2),
+                    maps:put(NewPos, ValueToMove, Tiles3)
+            end;
         box_right ->
             case maps:get(P, Tiles, undfined) of
                 undefined ->
                     %already Moved
                     Tiles;
                 ValueToMove ->
-                    
-            Tiles1 = do_move_in_direction(NewPos, Direction, Tiles),
-            Tiles2 = do_move_in_direction(add(NewPos, {0, -1}), Direction, Tiles1),
-            
-            Tiles3 = maps:remove(P, Tiles2),
-            maps:put(NewPos, ValueToMove, Tiles3)
-                end
-            end.
+
+                    Tiles1 = do_move_in_direction(NewPos, Direction, Tiles),
+                    Tiles2 = do_move_in_direction(add(NewPos, {0, -1}), Direction, Tiles1),
+
+                    Tiles3 = maps:remove(P, Tiles2),
+                    maps:put(NewPos, ValueToMove, Tiles3)
+            end
+    end.
