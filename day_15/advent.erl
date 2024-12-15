@@ -224,3 +224,20 @@ find_space_before_wall(Pos, MovementDirection, Tiles) ->
 gps_score({X, Y}) ->
     (100 * X) + Y.
 
+
+scale_map(WarehouseBlock) ->
+    scale_map(WarehouseBlock, <<>>).
+
+
+scale_map(<<>>, Acc) ->
+    Acc;
+scale_map(<<".", Rest/binary>>, Acc) ->
+    scale_map(Rest, << Acc/binary, "..">>);
+scale_map(<<"#", Rest/binary>>, Acc) ->
+    scale_map(Rest, << Acc/binary, "##">>);
+scale_map(<<"O", Rest/binary>>, Acc) ->
+    scale_map(Rest, << Acc/binary, "[]">>);
+scale_map(<<"@", Rest/binary>>, Acc) ->
+    scale_map(Rest, << Acc/binary, "@.">>);
+scale_map(<<"\n", Rest/binary>>, Acc) ->
+    scale_map(Rest, << Acc/binary, "\n">>).
