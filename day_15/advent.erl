@@ -2,6 +2,12 @@
 
 -compile(export_all).
 
+part_1(Filename) ->
+    {{Robot, Tiles, _Size}, Movements} = parse_file(Filename),
+    {_RobotFinished, FinalTiles} = apply_all_movement(Robot, Movements, Tiles),
+    %% Sum the Lists of the "GPS"
+    lists:sum(lists:map(fun({P, V}) -> case V of wall -> 0; box -> advent:gps_score(P) end end, maps:to_list(FinalTiles))).
+
 
 parse_file(Filename) ->
     {ok, Content} = file:read_file(Filename),
@@ -17,6 +23,8 @@ parse_movements(MovementBlock) ->
 
 parse_movements(<<>>, FinalMovement, Acc) ->
     tl(lists:reverse([FinalMovement | Acc]));  %% Tl (tail) removes the first element which would be the empty starter
+parse_movements(<<"\n", Rest/binary>>, LastMovement, Acc) ->
+    parse_movements(Rest, LastMovement, Acc);
 parse_movements(<<C:1/binary, Rest/binary>>, {C, N}, Acc) ->
     parse_movements(Rest, {C, N + 1}, Acc);
 parse_movements(<<C:1/binary, Rest/binary>>, LastMovement, Acc) ->
@@ -138,9 +146,10 @@ apply_all_movement(Robot, [Movement | Movements], Tiles) ->
 
 apply_movement(Robot, Movement, Tiles) ->
     {MovementDirection, MovementAmount} = get_movement_data(Movement),
-    {MaxFreeEndPosition, Boxes} = get_robot_movement_data(Robot, MovementDirection, MovementAmount, Tiles),
-    {NewRobot, NewTiles} = move_boxes(MaxFreeEndPosition, Boxes, inverse(MovementDirection), Tiles),
-    {NewRobot, NewTiles}.
+    {RobotExpectedFinish, Boxes} = get_robot_movement_data(Robot, MovementDirection, MovementAmount, Tiles),
+    {BoxesRemaining, NewTiles} = move_boxes(RobotExpectedFinish, Boxes, MovementDirection, Tiles),
+    {NewRobot, NewTiles1} = backfill_boxes(RobotExpectedFinish, BoxesRemaining, inverse(MovementDirection), NewTiles),
+    {NewRobot, NewTiles1}.
 
 
 get_movement_data({<<"^">>, Amount}) ->
@@ -161,8 +170,8 @@ get_robot_movement_data(Robot, MovementDirection, MovementAmount, Tiles) ->
                             {add(Robot, multiply(MovementDirection, MovementAmount)), []}).
 
 
-get_robot_movement_data(_Robot, _MovementDirection, 0 = _MovementAmount, _Tiles, Acc) ->
-    Acc;
+get_robot_movement_data(Robot, _MovementDirection, 0 = _MovementAmount, _Tiles, {_, Boxes} = _Acc) ->
+    {Robot, Boxes};
 get_robot_movement_data(Robot, MovementDirection, MovementAmount, Tiles, {CurrentFinalPosition, Boxes} = Acc) ->
     NextRobot = add(Robot, MovementDirection),
     case maps:get(NextRobot, Tiles, undefined) of
@@ -171,18 +180,47 @@ get_robot_movement_data(Robot, MovementDirection, MovementAmount, Tiles, {Curren
         box ->
             get_robot_movement_data(NextRobot,
                                     MovementDirection,
-                                    MovementAmount,
+                                    MovementAmount - 1,
                                     Tiles,
                                     {CurrentFinalPosition, [NextRobot | Boxes]});
         undefined ->
-            get_robot_movement_data(NextRobot, MovementDirection, -1, Tiles, Acc)
+            get_robot_movement_data(NextRobot, MovementDirection, MovementAmount -1, Tiles, Acc)
     end.
 
 
-move_boxes(Pos, [] = _Boxes, _MovementDirection, Tiles) ->
-    {Pos, Tiles};
+move_boxes(_Pos, [] = _Boxes, _MovementDirection, Tiles) ->
+    {[], Tiles};
 move_boxes(Pos, [Box | Boxes], MovementDirection, Tiles) ->
     %% remove the old box location and add it to the new position
-    Tiles1 = maps:remove(Box, Tiles),
-    Tiles2 = maps:put(Pos, box, Tiles1),
-    move_boxes(add(Pos, MovementDirection), Boxes, MovementDirection, Tiles2).
+    case find_space_before_wall(Pos, MovementDirection, Tiles) of
+        {_X, _Y} = NewPos ->
+            Tiles1 = maps:remove(Box, Tiles),
+            Tiles2 = maps:put(NewPos, box, Tiles1),
+            move_boxes(NewPos, Boxes, MovementDirection, Tiles2);
+    undefined ->
+        {[Box | Boxes], Tiles}
+end.
+
+
+find_space_before_wall(Pos, MovementDirection, Tiles) ->
+    NextPos = add(Pos, MovementDirection),
+    case maps:get(NextPos, Tiles, undefined) of
+        undefined ->
+            NextPos;
+        box ->
+            find_space_before_wall(NextPos, MovementDirection, Tiles);
+        wall ->
+            undefined
+        end.
+
+        backfill_boxes(Pos, [], _MovementDirection, Tiles) ->
+            {Pos, Tiles};
+        backfill_boxes(Pos, [Box | Boxes], MovementDirection, Tiles) ->
+            Tiles1 = maps:remove(Box, Tiles),
+            Tiles2 = maps:put(Pos, box, Tiles1),
+            NextPos = add(Pos, MovementDirection),
+            backfill_boxes(NextPos, Boxes, MovementDirection, Tiles2).
+
+gps_score({X, Y}) ->
+    (100 * X) + Y.
+
