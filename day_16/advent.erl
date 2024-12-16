@@ -12,8 +12,9 @@
 part_1(Filename) ->
     {Start, End, Points} = points_from_file(Filename),
     Graph = points_to_graph(Points),
-    %graph_to_directed_graph(Graph, Start, ?EAST, End).
-    Graph.
+    DirectedGraph = graph_to_directed_graph(Start, End, ?EAST, Graph),
+    {_, Score} = maps:get(End, DirectedGraph),
+    Score.
 
 
 points_from_file(Filename) ->
@@ -43,6 +44,7 @@ parse_points(<<_C, Rest/binary>>, X, Y, Accs) ->
 
 add({X1, Y1}, {X2, Y2}) ->
     {X1 + X2, Y1 + Y2}.
+
 
 inverse({X, Y}) ->
     {-X, -Y}.
@@ -90,15 +92,9 @@ print_points(Points, {MaxX, MaxY} = _Size) ->
     io:format("~s~n", [Print]).
 
 
-graph_to_directed_graph(Graph, Start, StartDirection, End) ->
-    {Edges, _} = maps:get(Start, Graph),
-    StartNode = {Edges, 0},
-    StartGraph = maps:put(Start, StartNode, Graph),
-    update_neighbours({Start, StartNode}, StartDirection, StartGraph, End).
-
-
 get_distance({X1, Y1} = _Point1, {X2, Y2} = _Point2) ->
     abs(X1 - X2) + abs(Y1 - Y2).
+
 
 get_turns(From, From) ->
     0;
@@ -107,6 +103,7 @@ get_turns({X1, Y1} = _Direction1, {X2, Y2} = _Direction2) when X1 == -X2 orelse 
 get_turns(_Point1, _Point2) ->
     1.
 
+
 update_score({Edges, infinity}, Distance) ->
     {Edges, Distance};
 update_score({Edges, Distance}, NewDistance) when NewDistance < Distance ->
@@ -114,46 +111,60 @@ update_score({Edges, Distance}, NewDistance) when NewDistance < Distance ->
 update_score(Node, _NewDistance) ->
     Node.
 
+
 remove_edge(Direction, {Edges, Distance} = _Node) ->
     NewEdges = lists:filter(fun(P) -> not (P == Direction) end, Edges),
     {NewEdges, Distance}.
 
+update_start_position(Start, Graph) ->
+    {Edges, _} = maps:get(Start, Graph),
+    maps:put(Start, {Edges, 0}, Graph).
 
-update_neighbours({EndPos, _} = _FromNode, _Facing, Graph, EndPos) ->
-    Graph;
-update_neighbours({FromPos, {Edges, _} = FromNode}, Facing, Graph, EndPos) ->
-    lists:foldl(
-        fun(E, Acc) ->
-            {Neighbour, Acc1} = update_neighbour({FromPos, FromNode}, Facing, E, Acc),
-            update_neighbours(Neighbour, E, Acc1, EndPos)
-        end, Graph, Edges
-    ).
-    
-update_neighbour({FromPos, FromNode}, Facing, Direction, Graph) ->
-    {NeighbourPos, Neighbour0} = find_neighbour(FromPos, Direction, Graph),
-    Neighbour1 = remove_edge(inverse(Direction), Neighbour0),
-    FromScore = get_score(FromNode),
-    io:format("FromPos=~p, FromNode=~p, FromScore=~p~n", [FromPos, FromNode, FromScore]),
-    Score = FromScore + 1000 * get_turns(Facing, Direction) + get_distance(FromPos, NeighbourPos),
-    Neightbour2 = update_score(Neighbour1, Score),
-    io:format("Updated neighbour=~p~n", [Neightbour2]),
-    NewGraph = maps:put(NeighbourPos, Neightbour2, Graph),
-    {{NeighbourPos, Neightbour2}, NewGraph}.
+graph_to_directed_graph(Start, End, Direction, Graph) ->
+    StartGraph = update_start_position(Start, Graph),
+    {DirectedGraph, _Visited} = graph_to_directed_graph(Start, End, Direction, StartGraph, sets:new()),
+    DirectedGraph.
 
+graph_to_directed_graph(End, End, _Direction, Graph, Visited) ->
+    {Graph, Visited};
+graph_to_directed_graph(Start, End, Direction, Graph, Visited) ->
+    case sets:is_element(Start, Visited) of
+        false ->
+            UpdatedVisited = sets:add_element(Start, Visited),
+            {Edges, Score} = maps:get(Start, Graph),
+            UpdatedGraph = lists:foldl(
+                fun(Edge, Acc) ->
+                    NextPos = get_next_node_position(Start, Edge, Acc),
+                    NewScore = Score + 1000 * get_turns(Direction, Edge) + get_distance(Start, NextPos),
+                    update_score_for_position(NextPos, NewScore, Acc)
+                end, Graph, Edges),
+            
+            lists:foldl(
+                fun(Edge, {GraphAcc, VisitedAcc}) ->
+                    NextPos = get_next_node_position(Start, Edge, Graph),
+                    graph_to_directed_graph(NextPos, End, Edge, GraphAcc, VisitedAcc)
+                end
+            , {UpdatedGraph, UpdatedVisited}, Edges);
+        true ->
+            {Graph, Visited}
+        end.
 
-get_score({_, Score}) ->
-    Score.
+get_next_node_position(Start, Direction, Graph) ->
+    NextPos = add(Start, Direction),
+    case maps:get(NextPos, Graph, error) of
+        error ->
+            get_next_node_position(NextPos, Direction, Graph);
+        _Node ->
+            NextPos
+        end.
 
-find_neighbours(From, Edges, Graph) when is_list(Edges) ->
-    lists:map(fun(E) -> find_neighbour(From, E, Graph) end, Edges);
-find_neighbours(From, {Edges, _Score}, Graph) ->
-    find_neighbours(From, Edges, Graph).
-
-find_neighbour(From, Direction, Graph) ->
-    NextPos = add(From, Direction),
-    case maps:get(NextPos, Graph, undefined) of
-        undefined ->
-            find_neighbour(NextPos, Direction, Graph);
-        Node ->
-            {NextPos, Node}
+update_score_for_position(Position, NewScore, Graph) ->
+    {Edges, Score} = maps:get(Position, Graph),
+    case Score of
+        infinity ->
+            maps:put(Position, {Edges, NewScore}, Graph);
+        Score when NewScore < Score ->
+            maps:put(Position, {Edges, NewScore}, Graph);
+        Score ->
+            Graph
         end.
