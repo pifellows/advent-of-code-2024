@@ -19,6 +19,27 @@ part_1(Filename) ->
     string:join(AsStrings, ",").
 
 
+part_2(Filename) ->
+    {{A, B, C}, Program} = parse_program(Filename),
+    try
+        lists:foreach(fun(N) -> repeat({N, B, C}, Program) end, lists:seq(0, A * 100))
+    catch
+        throw:A ->
+            A
+    end.
+
+
+repeat({A, _, _} = Registers, Program) ->
+    Output = run(Registers, Program, 0, []),
+    OutputBin = list_to_binary([integer_to_list(X) || X <- Output]),
+    case Program == OutputBin of
+        true ->
+            throw(A);
+        false ->
+            ok
+    end.
+
+
 parse_program(Filename) ->
     {ok, Content} = file:read_file(Filename),
     [RegisterBlob, ProgramBlob] = binary:split(Content, <<"\n\n">>),
@@ -46,11 +67,22 @@ parse_program_instructions(<<"Program: ", Program/binary>>) ->
 run(Registers, Program, ProgramPointer, Output) ->
     Operation = get_instuction(Program, ProgramPointer),
     case Operation of
+        invalid ->
+            [];
         halt ->
             lists:reverse(Output);
         {Opcode, Operand} ->
-            {NewRegisters, NewProgramPointer, NewOutput} = process(Opcode, Operand, Registers, ProgramPointer, Output),
+            {NewRegisters, NewProgramPointer, NewOutput} = process_safe(Opcode, Operand, Registers, ProgramPointer, Output),
             run(NewRegisters, Program, NewProgramPointer, NewOutput)
+    end.
+
+
+process_safe(Operator, Operand, Registers, ProgramPointer, Output) ->
+    try
+        process(Operator, Operand, Registers, ProgramPointer, Output)
+    catch
+        throw:invalid ->
+            {Registers, invalid, Output}
     end.
 
 
@@ -83,6 +115,9 @@ process(?CDV, Operand, {A, B, _C} = Registers, ProgramPointer, Output) ->
     NewC = trunc(A / math:pow(2, Value)),
     {{A, B, NewC}, ProgramPointer + 2, Output}.
 
+
+get_instuction(_Program, invalid) ->
+    invalid;
 get_instuction(Program, ProgramPointer) when size(Program) =< ProgramPointer ->
     halt;
 get_instuction(Program, ProgramPointer) ->
