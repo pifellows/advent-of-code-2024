@@ -12,8 +12,19 @@
 part_1(Filename) ->
     {Start, End, Points} = points_from_file(Filename),
     Graph = points_to_graph(Points),
-    Scores = walk_graph(Start, End, ?EAST, Graph),
-    lists:min(Scores).
+    DirectedGraph = graph_to_directed_graph(Start, End, ?EAST, Graph),
+    EndScores = get_scores_for_node(End, DirectedGraph),
+    get_minimum_score(EndScores).
+
+
+get_scores_for_node(Point, DirectedGraph) ->
+    maps:filter(fun({P, _D}, _V) ->
+         P == Point 
+        end, DirectedGraph).
+
+get_minimum_score(EndScores) ->
+    AsList = maps:to_list(EndScores),
+    lists:foldl(fun({_K, V}, Acc) -> min(Acc, V) end, infinity, AsList).
 
 
 points_from_file(Filename) ->
@@ -50,29 +61,37 @@ inverse({X, Y}) ->
 
 
 points_to_graph(Points) ->
-    PointsWithDirections = sets:map(
-                             fun(P) -> add_edge_directions(P, Points)
-                             end,
-                             Points),
-    FilterdNonNodes = sets:filter(
-                        fun({_P, E}) ->
-                                case E of
-                                    [?NORTH, ?SOUTH] ->
-                                        false;
-                                    [?EAST, ?WEST] ->
-                                        false;
-                                    _Otherwise ->
-                                        true
-                                end
-                        end,
-                        PointsWithDirections),
-    maps:from_list(sets:to_list(FilterdNonNodes)).
+    PointsList = sets:to_list(Points),
+    PointsWithEdges = lists:filtermap(fun(Point) ->
+                                                    Edges = get_edge_directions(Point, Points),
+                                                    case Edges of
+                                                        [A, B] ->
+                                                            case A /= inverse(B) of
+                                                                true ->
+                                                                    {true, {Point, Edges}};
+                                                                false ->
+                                                                    false
+                                                                end;
+                                                        Edges ->
+                                                            {true, {Point, Edges}}
+                                                    end
+                                            end,
+                                            PointsList),
+
+    EdgeMap = maps:from_list(PointsWithEdges),
+    maps:map(fun(Point, Edges) -> 
+        NextPositions = get_next_nodes(Point, Edges, EdgeMap),
+        {Edges, NextPositions}
+    end, EdgeMap).
+
+get_next_nodes(Point, Edges, Points) ->
+    lists:map(fun(Edge) -> get_next_node_position(Point, Edge, Points) end, Edges).
 
 
-add_edge_directions(P, Points) ->
+get_edge_directions(P, Points) ->
     Directions = [?NORTH, ?EAST, ?SOUTH, ?WEST],
     Connections = lists:filter(fun(D) -> sets:is_element(add(P, D), Points) end, Directions),
-    {P, Connections}.
+    Connections.
 
 
 print_points(Points, {MaxX, MaxY} = _Size) ->
@@ -111,41 +130,55 @@ update_score(Node, _NewDistance) ->
     Node.
 
 
-remove_edge(Direction, {Edges, Distance} = _Node) ->
-    NewEdges = lists:filter(fun(P) -> not (P == Direction) end, Edges),
-    {NewEdges, Distance}.
+graph_to_directed_graph(Start, End, Direction, Graph) ->
+    StartKey = {Start, Direction},
+    graph_to_directed_graph(Start, End, Direction, Graph, #{StartKey => 0}).
 
-update_start_position(Start, Graph) ->
-    {Edges, _} = maps:get(Start, Graph),
-    maps:put(Start, {Edges, 0}, Graph).
 
-walk_graph(Start, End, Direction, Graph) ->
-    Visited = sets:from_list([Start], [{version, 2}]),
-    CurrentScore = 0,
-    Walker = {Start, Direction, CurrentScore, Visited},
-    walk(Walker, Graph, End, []).
+graph_to_directed_graph(End, End, _Direction, _Graph, Visited) ->
+    Visited;
+graph_to_directed_graph(Position, End, Direction, Graph, Visited) ->
+    CurrentScore = maps:get({Position, Direction}, Visited),
+    NextPositions = maps:get(Position, Graph),
+    {UpdatedVisited, NextPoints} = update_score_paths(NextPositions, CurrentScore, Position, Direction, {Visited, []}),
+    lists:foldl(fun({NextPosition, NextDirection}, VisitedAcc) ->
+        graph_to_directed_graph(NextPosition, End, NextDirection, Graph, VisitedAcc)
+    end, UpdatedVisited, NextPoints).
 
-walk({End, _Direction, Score, _Visited}, _Graph, End, Acc) ->
-    [Score | Acc];
-walk({Position, Direction, CurrentScore, Visited}, Graph, End, Acc) ->
-    Edges = maps:get(Position, Graph),
-    lists:foldl(fun(Edge, Accu) ->
-        NextPos = get_next_node_position(Position, Edge, Graph),
-        case sets:is_element(NextPos, Visited) of
-            true ->
-                Accu;
-            false ->
-                ScoreChange = 1000 * get_turns(Direction, Edge) + get_distance(Position, NextPos),
-                walk({NextPos, Edge, CurrentScore + ScoreChange, sets:add_element(Position, Visited)}, Graph, End, Accu)
-            end
-    end, Acc, Edges).
 
-get_next_node_position(Start, Direction, Graph) ->
+update_score_paths({[], []}, _CurrentScore, _CurrentPosition, _CurrentDirection, Acc) ->
+    Acc;
+update_score_paths({[NextDirection | RestDirections], [NextPosition | RestPositions]}, CurrentScore, CurrentPosition, CurrentDirection, {Visited, NextPoints}) ->
+    NewScore = CurrentScore + 1000 * get_turns(NextDirection, CurrentDirection) + get_distance(NextPosition, CurrentPosition),
+    NextPositionCurrentScore = maps:get({NextPosition, NextDirection}, Visited, undefined),
+    NewAccs = case NextPositionCurrentScore of
+        undefined ->
+            {maps:put({NextPosition, NextDirection}, NewScore, Visited), [{NextPosition, NextDirection} | NextPoints]};
+        NextPositionCurrentScore when NewScore < NextPositionCurrentScore ->
+            {maps:put({NextPosition, NextDirection}, NewScore, Visited), [{NextPosition, NextDirection} | NextPoints]};
+        NextPositionCurrentScore ->
+            {Visited, NextPoints}
+        end,
+    update_score_paths({RestDirections, RestPositions}, CurrentScore, CurrentPosition, CurrentDirection, NewAccs).
+
+
+get_next_node_position(Start, Direction, Points) ->
     NextPos = add(Start, Direction),
-    case maps:get(NextPos, Graph, error) of
-        error ->
-            get_next_node_position(NextPos, Direction, Graph);
-        _Node ->
+    case sets:is_element(NextPos, Points) of
+        false ->
+            get_next_node_position(NextPos, Direction, Points);
+        true ->
             NextPos
-        end.
+    end.
 
+
+update_score_for_position(Position, NewScore, Graph) ->
+    {Edges, Score} = maps:get(Position, Graph),
+    case Score of
+        infinity ->
+            maps:put(Position, {Edges, NewScore}, Graph);
+        Score when NewScore < Score ->
+            maps:put(Position, {Edges, NewScore}, Graph);
+        Score ->
+            Graph
+    end.
